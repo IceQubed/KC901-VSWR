@@ -72,16 +72,16 @@ def main() -> None:
     parser.add_argument(
         "--fmin",
         type=float,
-        required=True,
+        default=1.7e9,
         metavar="Hz",
-        help="Minimum frequency of interest (Hz), e.g. 1.7e9 for 1.7 GHz",
+        help="Minimum frequency of interest in Hz (default: 1.7e9 = 1.7 GHz)",
     )
     parser.add_argument(
         "--fmax",
         type=float,
-        required=True,
+        default=2.5e9,
         metavar="Hz",
-        help="Maximum frequency of interest (Hz), e.g. 1.8e9 for 1.8 GHz",
+        help="Maximum frequency of interest in Hz (default: 2.5e9 = 2.5 GHz)",
     )
     parser.add_argument(
         "--input",
