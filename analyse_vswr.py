@@ -133,12 +133,15 @@ def main() -> None:
         print("No valid .ini data loaded.")
         return
 
-    # Plot
+    # Order best to worst (by score descending)
+    by_score = sorted(all_data, key=lambda x: x[3]["score"], reverse=True)
+
+    # Plot (same order: best to worst in legend)
     output_dir.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    colors = plt.cm.tab10(np.linspace(0, 1, max(len(all_data), 1)))
-    for i, (name, freq, vswr, fom) in enumerate(all_data):
+    colors = plt.cm.tab10(np.linspace(0, 1, max(len(by_score), 1)))
+    for i, (name, freq, vswr, fom) in enumerate(by_score):
         freq_ghz = freq / 1e9
         label = f"{name} (FoM {fom['score']:.3f})"
         ax.plot(freq_ghz, vswr, label=label, color=colors[i % len(colors)], alpha=0.9)
@@ -161,8 +164,7 @@ def main() -> None:
     fig.savefig(plot_path, dpi=150, bbox_inches="tight", pad_inches=0.2)
     plt.close(fig)
 
-    # Build and save figure-of-merit report to output folder
-    by_score = sorted(all_data, key=lambda x: x[3]["score"], reverse=True)
+    # Build and save figure-of-merit report to output folder (best to worst)
     fom_path = output_dir / "vswr_fom.txt"
     with open(fom_path, "w", encoding="utf-8") as report:
         report.write(
