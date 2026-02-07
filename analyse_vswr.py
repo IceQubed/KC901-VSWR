@@ -12,6 +12,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import MultipleLocator
 
 
 def parse_ini(path: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -139,7 +140,8 @@ def main() -> None:
     colors = plt.cm.tab10(np.linspace(0, 1, max(len(all_data), 1)))
     for i, (name, freq, vswr, fom) in enumerate(all_data):
         freq_ghz = freq / 1e9
-        ax.plot(freq_ghz, vswr, label=name, color=colors[i % len(colors)], alpha=0.9)
+        label = f"{name} (FoM {fom['score']:.3f})"
+        ax.plot(freq_ghz, vswr, label=label, color=colors[i % len(colors)], alpha=0.9)
 
     # Highlight band of interest
     ax.axvspan(fmin_hz / 1e9, fmax_hz / 1e9, alpha=0.15, color="green", zorder=0)
@@ -149,13 +151,14 @@ def main() -> None:
     ax.set_xlabel("Frequency (GHz)")
     ax.set_ylabel("VSWR")
     ax.set_title("VSWR vs frequency (band of interest shaded)")
-    ax.legend(loc="upper right", fontsize=8)
+    ax.xaxis.set_major_locator(MultipleLocator(0.1))
+    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1), fontsize=8, frameon=True)
     ax.grid(True, alpha=0.3)
     ax.set_ylim(bottom=0.95)
-    fig.tight_layout()
-    # Save plot to output folder
+    fig.tight_layout(rect=(0, 0, 0.92, 1))
+    # Save plot to output folder (bbox_inches='tight' crops unused whitespace)
     plot_path = output_dir / args.plot_file
-    fig.savefig(plot_path, dpi=150)
+    fig.savefig(plot_path, dpi=150, bbox_inches="tight", pad_inches=0.2)
     plt.close(fig)
 
     # Build and save figure-of-merit report to output folder
