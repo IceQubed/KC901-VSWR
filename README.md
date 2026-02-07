@@ -11,18 +11,18 @@ Analyser for KC901 VNA S11 VSWR measurement output.
 python analyse_vswr.py
 ```
 
-To use a different band:
+To use a different band (e.g. 1.6 - 1.8 GHz):
 
 ```bash
-python analyse_vswr.py --fmin 1.7e9 --fmax 1.8e9
+python analyse_vswr.py --fmin 1.6e9 --fmax 1.8e9
 ```
 
 Options:
 - `--fmin`, `--fmax`: Min/max frequency of interest in Hz (default: 1.7e9–2.5e9, i.e. 1.7–2.5 GHz).
 - `--input`: Folder with `.ini` files (default: `input`).
-- `--output`: Folder for all outputs (default: `output`; this folder is gitignored).
+- `--output`: Folder for all outputs (default: `output`).
 - `--plot-file`: Plot filename inside output folder (default: `vswr_curves.png`).
 
-All outputs go into the `output/` folder (so you can find them easily and they are not committed to git):
+All outputs go into the `output/` folder:
 - **vswr_curves.png** – graph of all VSWR curves over the full sweep, with the band of interest shaded.
-- **vswr_fom.txt** – figure-of-merit report per file: mean VSWR, max VSWR, and a score (1 = ideal). Best antenna = VSWR close to 1 over the whole range of interest.
+- **vswr_fom.txt** – figure-of-merit report per file: mean VSWR, max VSWR, and a score (higher scores are better). Best antenna = VSWR close to 1 over the whole range of interest.
