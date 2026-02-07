@@ -1,6 +1,7 @@
 #repo specific
 input/
 output/
+.matplotlib/
 .DS_Store
 
 # Byte-compiled / optimized / DLL files
