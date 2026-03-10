@@ -2,9 +2,9 @@
 """
 KC901V VNA S11/VSWR analyser.
 
-Reads .ini measurement files from the input folder, plots VSWR vs frequency
-with a highlighted band of interest, and computes a figure of merit per file
-(best antenna = VSWR close to 1 over the range of interest).
+Reads .ini and .xlsx measurement files from the input folder, plots VSWR vs
+frequency with a highlighted band of interest, and computes a figure of merit
+per file (best antenna = VSWR close to 1 over the range of interest).
 """
 
 import argparse
@@ -13,6 +13,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import MultipleLocator
+from openpyxl import load_workbook
 
 
 def parse_ini(path: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -34,6 +35,30 @@ def parse_ini(path: Path) -> tuple[np.ndarray, np.ndarray]:
                     if len(part) == 2:
                         freqs.append(int(part[0]))
                         vswr.append(float(part[1]))
+    if not freqs:
+        raise ValueError(f"No curve data in {path}")
+    return np.array(freqs), np.array(vswr)
+
+
+def parse_xlsx(path: Path) -> tuple[np.ndarray, np.ndarray]:
+    """Parse a KC901V .xlsx file (e.g. S11-VSWR sheet); return (freq_Hz, vswr) arrays."""
+    wb = load_workbook(path, read_only=True, data_only=True)
+    sheet_name = "S11-VSWR" if "S11-VSWR" in wb.sheetnames else wb.sheetnames[0]
+    ws = wb[sheet_name]
+    freqs = []
+    vswr = []
+    for i, row in enumerate(ws.iter_rows(values_only=True)):
+        if not row or row[0] is None:
+            continue
+        # Skip header row (e.g. "Frequency(Hz)", "Value", ...)
+        try:
+            f = int(float(row[0]))
+            v = float(row[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        freqs.append(f)
+        vswr.append(v)
+    wb.close()
     if not freqs:
         raise ValueError(f"No curve data in {path}")
     return np.array(freqs), np.array(vswr)
@@ -68,7 +93,7 @@ def figure_of_merit(freq_Hz: np.ndarray, vswr: np.ndarray, fmin_Hz: float, fmax_
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Analyse KC901V VNA S11/VSWR .ini files: plot curves and compute FOM."
+        description="Analyse KC901V VNA S11/VSWR .ini and .xlsx files: plot curves and compute FOM."
     )
     parser.add_argument(
         "--fmin",
@@ -88,7 +113,7 @@ def main() -> None:
         "--input",
         type=Path,
         default=Path("input"),
-        help="Folder containing .ini files (default: input)",
+        help="Folder containing .ini and/or .xlsx measurement files (default: input)",
     )
     parser.add_argument(
         "--output",
@@ -114,23 +139,26 @@ def main() -> None:
     if not input_dir.is_dir():
         parser.error(f"Input folder not found: {input_dir}")
 
-    ini_files = sorted(input_dir.glob("*.ini"))
-    if not ini_files:
-        print(f"No .ini files found in {input_dir}")
+    data_files = sorted(input_dir.glob("*.ini")) + sorted(input_dir.glob("*.xlsx"))
+    if not data_files:
+        print(f"No .ini or .xlsx files found in {input_dir}")
         return
 
-    # Load all curves and FOMs
+    # Load all curves and FOMs (same handling for .ini and .xlsx)
     all_data: list[tuple[str, np.ndarray, np.ndarray, dict]] = []
-    for p in ini_files:
+    for p in data_files:
         try:
-            freq, vswr = parse_ini(p)
+            if p.suffix.lower() == ".ini":
+                freq, vswr = parse_ini(p)
+            else:
+                freq, vswr = parse_xlsx(p)
             fom = figure_of_merit(freq, vswr, fmin_hz, fmax_hz)
             all_data.append((p.stem, freq, vswr, fom))
         except Exception as e:
             print(f"Warning: skip {p.name}: {e}")
 
     if not all_data:
-        print("No valid .ini data loaded.")
+        print("No valid measurement data loaded.")
         return
 
     # Order best to worst (by score descending)

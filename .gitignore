@@ -1,8 +1,13 @@
-#repo specific
+# Repo-specific: generated/output dirs and caches (example_data/ including .xlsx is tracked)
 input/
 output/
 .matplotlib/
+.mplconfig/
 .DS_Store
+# Pip packages installed with --target . (use pip install -r requirements.txt instead)
+openpyxl/
+et_xmlfile/
+*.dist-info/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
