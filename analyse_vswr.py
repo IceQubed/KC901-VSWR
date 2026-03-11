@@ -166,9 +166,10 @@ def main() -> None:
 
     # Plot (same order: best to worst in legend)
     output_dir.mkdir(parents=True, exist_ok=True)
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(12, 12))
 
-    colors = plt.cm.tab10(np.linspace(0, 1, max(len(by_score), 1)))
+    n_series = max(len(by_score), 1)
+    colors = plt.cm.nipy_spectral(np.linspace(0.1, 0.95, n_series))
     for i, (name, freq, vswr, fom) in enumerate(by_score):
         freq_ghz = freq / 1e9
         label = f"{name} (FoM {fom['score']:.3f})"
