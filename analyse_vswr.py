@@ -8,6 +8,7 @@ per file (best antenna = VSWR close to 1 over the range of interest).
 """
 
 import argparse
+import csv
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -215,6 +216,14 @@ def main() -> None:
         best = by_score[0]
         report.write(f"Best in band: {best[0]} (score {best[3]['score']:.4f})\n")
 
+    # Save same figure-of-merit data as CSV
+    fom_csv_path = output_dir / "vswr_fom.csv"
+    with open(fom_csv_path, "w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["File", "Mean VSWR", "Max VSWR", "Score"])
+        for name, _freq, _vswr, fom in by_score:
+            writer.writerow([name, f"{fom['mean_vswr']:.4f}", f"{fom['max_vswr']:.4f}", f"{fom['score']:.4f}"])
+
     # Print summary to terminal and confirm all outputs are in output folder
     print("\nFigure of merit (band of interest: {:.3f}–{:.3f} GHz)".format(fmin_hz / 1e9, fmax_hz / 1e9))
     print("-" * 70)
@@ -230,6 +239,7 @@ def main() -> None:
     print(f"\nAll outputs written to {output_dir.resolve()}:")
     print(f"  - {plot_path.name}")
     print(f"  - {fom_path.name}")
+    print(f"  - {fom_csv_path.name}")
 
 
 if __name__ == "__main__":
