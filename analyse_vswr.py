@@ -65,24 +65,46 @@ def parse_xlsx(path: Path) -> tuple[np.ndarray, np.ndarray]:
     return np.array(freqs), np.array(vswr)
 
 
-def figure_of_merit(freq_Hz: np.ndarray, vswr: np.ndarray, fmin_Hz: float, fmax_Hz: float) -> dict:
+def figure_of_merit(
+    freq_Hz: np.ndarray,
+    vswr: np.ndarray,
+    fmin_Hz: float,
+    fmax_Hz: float,
+    extra_fmin_Hz: float | None = None,
+    extra_fmax_Hz: float | None = None,
+    extra_weight: float = 2.0,
+) -> dict:
     """
     Compute figures of merit for the band [fmin_Hz, fmax_Hz].
     Best antenna: VSWR close to 1 over the whole range.
+    If extra_fmin_Hz/extra_fmax_Hz are set, points in that sub-band are weighted
+    by extra_weight in the score (e.g. 2.0 = twice as important).
     Returns dict with mean_vswr, max_vswr, score (0–1, 1 = best).
     """
     mask = (freq_Hz >= fmin_Hz) & (freq_Hz <= fmax_Hz)
     if not np.any(mask):
         return {"mean_vswr": np.nan, "max_vswr": np.nan, "score": 0.0, "n_points": 0}
 
+    f_masked = freq_Hz[mask]
     v = vswr[mask]
     n = len(v)
     mean_vswr = float(np.mean(v))
     max_vswr = float(np.max(v))
-    # Score: 1 when all VSWR = 1; penalise mean squared deviation from 1.
-    # Using 1 / (1 + mean((vswr-1)^2)) so score in (0, 1], 1 = perfect.
-    mse = np.mean((v - 1.0) ** 2)
-    score = 1.0 / (1.0 + mse)
+
+    # Weights: 1 in main band; extra_weight in [extra_fmin, extra_fmax] if specified
+    use_extra = (
+        extra_fmin_Hz is not None
+        and extra_fmax_Hz is not None
+        and extra_fmin_Hz < extra_fmax_Hz
+    )
+    if use_extra:
+        in_extra = (f_masked >= extra_fmin_Hz) & (f_masked <= extra_fmax_Hz)
+        weights = np.where(in_extra, extra_weight, 1.0)
+        weighted_sq_err = np.sum(weights * (v - 1.0) ** 2) / np.sum(weights)
+        score = 1.0 / (1.0 + weighted_sq_err)
+    else:
+        mse = np.mean((v - 1.0) ** 2)
+        score = 1.0 / (1.0 + mse)
 
     return {
         "mean_vswr": mean_vswr,
@@ -111,6 +133,27 @@ def main() -> None:
         help="Maximum frequency of interest in Hz (default: 2.5e9 = 2.5 GHz)",
     )
     parser.add_argument(
+        "--extra-fmin",
+        type=float,
+        default=None,
+        metavar="Hz",
+        help="Start of extra-scoring sub-band in Hz (must be within --fmin/--fmax)",
+    )
+    parser.add_argument(
+        "--extra-fmax",
+        type=float,
+        default=None,
+        metavar="Hz",
+        help="End of extra-scoring sub-band in Hz (must be within --fmin/--fmax)",
+    )
+    parser.add_argument(
+        "--extra-weight",
+        type=float,
+        default=2.0,
+        metavar="W",
+        help="Weight for points in extra-scoring sub-band (default: 2 = twice as important)",
+    )
+    parser.add_argument(
         "--input",
         type=Path,
         default=Path("input"),
@@ -135,6 +178,20 @@ def main() -> None:
     if fmin_hz >= fmax_hz:
         parser.error("--fmin must be less than --fmax")
 
+    # Extra-scoring is only used when user explicitly passes both --extra-fmin and --extra-fmax
+    extra_fmin = args.extra_fmin
+    extra_fmax = args.extra_fmax
+    extra_weight = args.extra_weight
+    if (extra_fmin is not None) != (extra_fmax is not None):
+        parser.error("--extra-fmin and --extra-fmax must be given together")
+    if extra_fmin is not None and extra_fmax is not None:
+        if extra_fmin >= extra_fmax:
+            parser.error("--extra-fmin must be less than --extra-fmax")
+        if extra_fmin < fmin_hz or extra_fmax > fmax_hz:
+            parser.error("Extra-scoring band must lie within region of interest (--fmin to --fmax)")
+        if extra_weight <= 0:
+            parser.error("--extra-weight must be positive")
+
     input_dir = args.input
     output_dir = args.output
     if not input_dir.is_dir():
@@ -153,7 +210,15 @@ def main() -> None:
                 freq, vswr = parse_ini(p)
             else:
                 freq, vswr = parse_xlsx(p)
-            fom = figure_of_merit(freq, vswr, fmin_hz, fmax_hz)
+            if extra_fmin is not None and extra_fmax is not None:
+                fom = figure_of_merit(
+                    freq, vswr, fmin_hz, fmax_hz,
+                    extra_fmin_Hz=extra_fmin,
+                    extra_fmax_Hz=extra_fmax,
+                    extra_weight=extra_weight,
+                )
+            else:
+                fom = figure_of_merit(freq, vswr, fmin_hz, fmax_hz)
             all_data.append((p.stem, freq, vswr, fom))
         except Exception as e:
             print(f"Warning: skip {p.name}: {e}")
@@ -180,10 +245,21 @@ def main() -> None:
     ax.axvspan(fmin_hz / 1e9, fmax_hz / 1e9, alpha=0.15, color="green", zorder=0)
     ax.axvline(fmin_hz / 1e9, color="green", linestyle="--", alpha=0.6, linewidth=0.8)
     ax.axvline(fmax_hz / 1e9, color="green", linestyle="--", alpha=0.6, linewidth=0.8)
+    # Extra-scoring sub-band (darker overlay)
+    if extra_fmin is not None and extra_fmax is not None:
+        ax.axvspan(
+            extra_fmin / 1e9, extra_fmax / 1e9,
+            alpha=0.25, color="green", zorder=0,
+        )
+        ax.axvline(extra_fmin / 1e9, color="green", linestyle=":", alpha=0.7, linewidth=0.8)
+        ax.axvline(extra_fmax / 1e9, color="green", linestyle=":", alpha=0.7, linewidth=0.8)
 
     ax.set_xlabel("Frequency (GHz)")
     ax.set_ylabel("VSWR")
-    ax.set_title("VSWR vs frequency (band of interest shaded)")
+    title = "VSWR vs frequency (band of interest shaded)"
+    if extra_fmin is not None and extra_fmax is not None:
+        title += f"\n(darker: extra-scoring {extra_fmin/1e9:.2f}–{extra_fmax/1e9:.2f} GHz, weight {extra_weight}×)"
+    ax.set_title(title)
     ax.xaxis.set_major_locator(MultipleLocator(0.1))
     ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1), fontsize=8, frameon=True)
     ax.grid(True, alpha=0.3)
@@ -202,6 +278,12 @@ def main() -> None:
                 fmin_hz / 1e9, fmax_hz / 1e9
             )
         )
+        if extra_fmin is not None and extra_fmax is not None:
+            report.write(
+                "Extra-scoring sub-band: {:.3f}–{:.3f} GHz (weight {}×)\n".format(
+                    extra_fmin / 1e9, extra_fmax / 1e9, extra_weight
+                )
+            )
         report.write("-" * 70 + "\n")
         report.write(f"{'File':<45} {'Mean VSWR':>10} {'Max VSWR':>10} {'Score':>8}\n")
         report.write("-" * 70 + "\n")
@@ -210,9 +292,14 @@ def main() -> None:
                 f"{name:<45} {fom['mean_vswr']:>10.4f} {fom['max_vswr']:>10.4f} {fom['score']:>8.4f}\n"
             )
         report.write("-" * 70 + "\n")
-        report.write(
-            "Score: 1 = ideal (VSWR = 1 across band). Lower mean/max VSWR is better.\n"
-        )
+        if extra_fmin is not None and extra_fmax is not None:
+            report.write(
+                "Score: weighted by sub-band (extra band {}×). 1 = ideal. Lower mean/max VSWR is better.\n".format(extra_weight)
+            )
+        else:
+            report.write(
+                "Score: 1 = ideal (VSWR = 1 across band). Lower mean/max VSWR is better.\n"
+            )
         best = by_score[0]
         report.write(f"Best in band: {best[0]} (score {best[3]['score']:.4f})\n")
 
@@ -226,6 +313,8 @@ def main() -> None:
 
     # Print summary to terminal and confirm all outputs are in output folder
     print("\nFigure of merit (band of interest: {:.3f}–{:.3f} GHz)".format(fmin_hz / 1e9, fmax_hz / 1e9))
+    if extra_fmin is not None and extra_fmax is not None:
+        print("Extra-scoring sub-band: {:.3f}–{:.3f} GHz (weight {}×)".format(extra_fmin / 1e9, extra_fmax / 1e9, extra_weight))
     print("-" * 70)
     print(f"{'File':<45} {'Mean VSWR':>10} {'Max VSWR':>10} {'Score':>8}")
     print("-" * 70)
@@ -234,7 +323,10 @@ def main() -> None:
             f"{name:<45} {fom['mean_vswr']:>10.4f} {fom['max_vswr']:>10.4f} {fom['score']:>8.4f}"
         )
     print("-" * 70)
-    print("Score: 1 = ideal (VSWR = 1 across band). Lower mean/max VSWR is better.")
+    if extra_fmin is not None and extra_fmax is not None:
+        print("Score: weighted by sub-band (extra band {}×). 1 = ideal. Lower mean/max VSWR is better.".format(extra_weight))
+    else:
+        print("Score: 1 = ideal (VSWR = 1 across band). Lower mean/max VSWR is better.")
     print(f"Best in band: {best[0]} (score {best[3]['score']:.4f})")
     print(f"\nAll outputs written to {output_dir.resolve()}:")
     print(f"  - {plot_path.name}")

@@ -38,6 +38,18 @@ python analyse_vswr.py --fmin 1.6e9 --fmax 1.8e9
 - `--output`: Folder for all outputs (default: `output`).
 - `--plot-file`: Plot filename inside output folder (default: `vswr_curves.png`).
 
+**Extra-scoring sub-band (optional):**  
+You can make a sub-band within the region of interest count more in the figure of merit. This only applies when you explicitly pass the arguments. Example: band of interest 1.7–2.5 GHz, with 2.4–2.5 GHz weighted twice:
+
+```bash
+python analyse_vswr.py --extra-fmin 2.4e9 --extra-fmax 2.5e9 --extra-weight 2
+```
+
+- `--extra-fmin`, `--extra-fmax`: Start and end of the sub-band in Hz; must lie within `--fmin`/`--fmax`. Both must be given together; if omitted, no extra scoring is used.
+- `--extra-weight`: Weight for points in the sub-band (default: 2, i.e. twice as important). Only used when `--extra-fmin` and `--extra-fmax` are set.
+
+The plot shows the extra-scoring sub-band as a darker shaded region; the FoM score and ranking favour better VSWR in that sub-band.
+
 **Outputs** (written to `output/`):
 - **vswr_curves.png** – VSWR vs frequency for all files, with the band of interest shaded.
 - **vswr_fom.txt** – Figure-of-merit report: mean VSWR, max VSWR, and score per file (higher = better; ideal is VSWR ≈ 1 across the band).
